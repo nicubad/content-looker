@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Looker Content Ogooga</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #f1f5f9; color: #1e293b; min-height: 100vh; font-size: 14px; }
+
+    /* ── LAYOUT ── */
+    #app { display: flex; flex-direction: column; min-height: 100vh; }
+    #loading-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; gap:16px; }
+    .spinner { width:40px; height:40px; border:3px solid #e2e8f0; border-top-color:#3b82f6; border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .loading-text { color:#64748b; font-size:14px; }
+
+    /* ── HEADER ── */
+    header { background:#0f172a; color:#e2e8f0; padding:0 20px; display:flex; align-items:center; gap:16px; height:52px; position:sticky; top:0; z-index:100; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+    .nav-brand { font-weight:800; font-size:15px; white-space:nowrap; letter-spacing:-0.5px; }
+    .nav-brand em { color:#3b82f6; font-style:normal; }
+    nav.main-nav { display:flex; gap:2px; flex:1; }
+    .nav-btn { background:none; border:none; color:#94a3b8; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px; font-weight:500; transition:all 0.15s; white-space:nowrap; }
+    .nav-btn:hover { background:#1e293b; color:#e2e8f0; }
+    .nav-btn.active { background:#1d4ed8; color:#fff; }
+    .nav-btn.no-data { opacity:0.4; cursor:default; }
+    .period-sel { display:flex; gap:2px; background:#1e293b; border-radius:8px; padding:3px; }
+    .period-btn { background:none; border:none; color:#94a3b8; padding:5px 10px; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600; transition:all 0.15s; }
+    .period-btn.active { background:#3b82f6; color:#fff; }
+    .hdr-actions { display:flex; gap:6px; }
+    .btn-hdr { background:#1e293b; border:1px solid #334155; color:#94a3b8; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:12px; transition:all 0.15s; }
+    .btn-hdr:hover { background:#334155; color:#e2e8f0; }
+
+    /* ── MAIN ── */
+    main { flex:1; padding:20px; max-width:1440px; width:100%; margin:0 auto; }
+    .view { display:none; }
+    .view.active { display:block; }
+
+    /* ── CARDS ── */
+    .card { background:#fff; border-radius:12px; padding:18px 20px; box-shadow:0 1px 3px rgba(0,0,0,0.07); border:1px solid #e2e8f0; }
+    .card-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#64748b; margin-bottom:4px; }
+    .card-value { font-size:26px; font-weight:800; color:#1e293b; line-height:1.1; }
+    .card-trend { font-size:12px; margin-top:5px; display:flex; align-items:center; gap:4px; }
+
+    /* ── TRENDS ── */
+    .pill { display:inline-flex; align-items:center; gap:3px; padding:2px 7px; border-radius:12px; font-size:11px; font-weight:700; }
+    .pill-up   { background:#dcfce7; color:#15803d; }
+    .pill-down { background:#fee2e2; color:#b91c1c; }
+    .pill-nil  { background:#f1f5f9; color:#94a3b8; }
+
+    /* ── GRIDS ── */
+    .g3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .g4 { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+    .g6 { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; }
+    .g2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+
+    /* ── SECTION ── */
+    .sec { margin-bottom:24px; }
+    .sec-hdr { display:flex; align-items:baseline; gap:10px; margin-bottom:14px; }
+    .sec-title { font-size:15px; font-weight:700; color:#1e293b; }
+    .sec-sub { font-size:12px; color:#94a3b8; }
+
+    /* ── MINI SITE CARD ── */
+    .site-mini { background:#fff; border-radius:12px; padding:18px; border:1px solid #e2e8f0; cursor:pointer; transition:all 0.15s; }
+    .site-mini:hover { box-shadow:0 4px 16px rgba(0,0,0,0.1); transform:translateY(-1px); border-color:#3b82f6; }
+    .site-mini-name { font-size:13px; font-weight:700; color:#1e293b; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+    .site-mini-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    .site-mini-metrics { display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; }
+    .sm-m-label { font-size:10px; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+    .sm-m-val { font-size:16px; font-weight:800; color:#1e293b; }
+    .sm-m-trend { font-size:11px; }
+    .cat-bar-wrap { display:flex; gap:3px; height:5px; border-radius:3px; overflow:hidden; margin-top:12px; }
+    .cat-bar { min-width:2px; transition:flex 0.3s; border-radius:2px; }
+
+    /* ── ALERT CARDS ── */
+    .alert-strip { display:flex; flex-direction:column; gap:8px; }
+    .alert-item { background:#fff; border-radius:8px; padding:12px 14px; border-left:4px solid #f59e0b; display:flex; align-items:flex-start; gap:10px; box-shadow:0 1px 2px rgba(0,0,0,0.06); }
+    .alert-icon { font-size:18px; flex-shrink:0; }
+    .alert-body { flex:1; min-width:0; }
+    .alert-url { font-size:13px; font-weight:700; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:monospace; }
+    .alert-meta { font-size:11px; color:#64748b; margin-top:2px; }
+    .alert-metrics { font-size:11px; font-weight:600; color:#dc2626; }
+
+    /* ── BADGES ── */
+    .badge { display:inline-flex; align-items:center; gap:3px; padding:2px 7px; border-radius:12px; font-size:10px; font-weight:700; white-space:nowrap; }
+    .b-mm { background:#dcfce7; color:#15803d; }
+    .b-gn { background:#fef9c3; color:#92400e; }
+    .b-bh { background:#fee2e2; color:#991b1b; }
+    .b-dw { background:#f3f4f6; color:#6b7280; }
+    .b-lv { background:#e0f2fe; color:#0369a1; }
+    .b-risk { background:#fff7ed; color:#c2410c; }
+
+    /* ── TABS ── */
+    .tab-nav { display:flex; gap:2px; margin-bottom:0; border-bottom:2px solid #e2e8f0; overflow-x:auto; }
+    .tab-nav::-webkit-scrollbar { height:0; }
+    .tab-btn { background:none; border:none; padding:9px 14px; font-size:13px; font-weight:500; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; white-space:nowrap; transition:all 0.15s; }
+    .tab-btn:hover { color:#1e293b; }
+    .tab-btn.active { color:#3b82f6; border-bottom-color:#3b82f6; font-weight:600; }
+    .tab-cnt { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; border-radius:9px; font-size:10px; margin-left:5px; background:#f1f5f9; padding:0 4px; }
+    .tab-btn.active .tab-cnt { background:#dbeafe; color:#1d4ed8; }
+
+    /* ── TABLES ── */
+    .tbl-wrap { overflow-x:auto; border-radius:0 0 12px 12px; }
+    .tbl-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    thead th { background:#f8fafc; padding:9px 11px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#64748b; border-bottom:2px solid #e2e8f0; white-space:nowrap; cursor:pointer; user-select:none; }
+    thead th:hover { background:#f1f5f9; color:#374151; }
+    thead th.sort-asc::after { content:' ↑'; color:#3b82f6; }
+    thead th.sort-desc::after { content:' ↓'; color:#3b82f6; }
+    td { padding:8px 11px; border-bottom:1px solid #f8fafc; vertical-align:middle; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#fafbff; }
+    tr.at-risk td { background:#fff8f0 !important; }
+    tr.at-risk:hover td { background:#fff3e0 !important; }
+    .td-url { font-family:'SF Mono','Fira Code',monospace; font-size:11px; max-width:260px; }
+    .td-url a { color:#1d4ed8; text-decoration:none; }
+    .td-url a:hover { text-decoration:underline; }
+    .td-se { font-weight:800; font-size:13px; }
+    .td-num { text-align:right; }
+    .td-trend { text-align:right; }
+    .cu-link { color:#7c3aed; text-decoration:none; font-size:11px; }
+    .cu-link:hover { text-decoration:underline; }
+    .gsc-pos { font-weight:700; }
+    .gsc-pos.p-good { color:#15803d; }
+    .gsc-pos.p-ok   { color:#d97706; }
+    .gsc-pos.p-bad  { color:#dc2626; }
+
+    /* ── TOP LISTS ── */
+    .top-list { list-style:none; }
+    .top-item { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #f8fafc; }
+    .top-item:last-child { border-bottom:none; }
+    .top-rank { width:22px; height:22px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#64748b; flex-shrink:0; }
+    .top-item-body { flex:1; min-width:0; }
+    .top-url { font-size:11px; font-family:monospace; color:#1d4ed8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .top-meta { font-size:11px; color:#64748b; margin-top:1px; }
+
+    /* ── LEGEND ── */
+    .legend-wrap { margin-top:20px; }
+    .legend-hdr { display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:12px 18px; background:#fff; border-radius:12px; border:1px solid #e2e8f0; }
+    .legend-hdr.open { border-radius:12px 12px 0 0; }
+    .legend-hdr h3 { font-size:13px; font-weight:700; color:#1e293b; }
+    .legend-toggle { font-size:12px; color:#64748b; }
+    .legend-body { background:#fff; border:1px solid #e2e8f0; border-top:none; border-radius:0 0 12px 12px; padding:18px 20px; }
+    .legend-body.hidden { display:none; }
+    .legend-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 24px; }
+    .leg-term { font-size:12px; font-weight:700; color:#1e293b; }
+    .leg-def  { font-size:12px; color:#64748b; line-height:1.5; }
+    .leg-cat  { display:flex; gap:8px; }
+    .leg-cat-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; margin-top:3px; }
+
+    /* ── MODALS ── */
+    .overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); z-index:200; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(2px); }
+    .overlay.open { display:flex; }
+    .modal { background:#fff; border-radius:16px; padding:24px; width:100%; max-width:520px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
+    .modal-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+    .modal-title { font-size:17px; font-weight:800; color:#1e293b; }
+    .modal-close { background:none; border:none; font-size:18px; cursor:pointer; color:#94a3b8; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; }
+    .modal-close:hover { background:#f1f5f9; color:#1e293b; }
+
+    /* ── FORMS ── */
+    .fg { margin-bottom:14px; }
+    .fg label { display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:5px; }
+    .fg input[type="text"], .fg input[type="password"], .fg select { width:100%; padding:8px 11px; border:1px solid #d1d5db; border-radius:8px; font-size:13px; color:#1e293b; }
+    .fg input:focus, .fg select:focus { outline:none; border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,0.12); }
+    .fg input[type="file"] { width:100%; padding:6px; border:1px dashed #d1d5db; border-radius:8px; font-size:12px; cursor:pointer; }
+    .btn-primary { background:#2563eb; color:#fff; border:none; padding:9px 18px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:background 0.15s; }
+    .btn-primary:hover { background:#1d4ed8; }
+    .btn-secondary { background:#f8fafc; color:#374151; border:1px solid #d1d5db; padding:9px 18px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+    .btn-secondary:hover { background:#f1f5f9; }
+    .btn-danger { background:#dc2626; color:#fff; border:none; padding:9px 18px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+    .fg-row { display:flex; gap:8px; align-items:flex-end; }
+    .fg-row .fg { flex:1; margin-bottom:0; }
+
+    /* ── BANNERS ── */
+    .banner { border-radius:8px; padding:10px 14px; font-size:12px; margin-bottom:12px; }
+    .banner-error   { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+    .banner-success { background:#f0fdf4; border:1px solid #bbf7d0; color:#15803d; }
+    .banner-info    { background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; }
+    .banner-warn    { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+
+    /* ── UPLOAD STATUS LIST ── */
+    .file-status-list { display:flex; flex-direction:column; gap:6px; margin:14px 0; }
+    .fsl-item { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#f8fafc; border-radius:7px; font-size:12px; }
+    .fsl-name { font-weight:600; color:#1e293b; }
+    .fsl-ok   { color:#16a34a; font-weight:600; }
+    .fsl-miss { color:#94a3b8; }
+    .fsl-err  { color:#dc2626; font-weight:600; }
+
+    /* ── NO DATA ── */
+    .no-data { text-align:center; padding:40px 20px; color:#94a3b8; }
+    .no-data-icon { font-size:40px; margin-bottom:10px; }
+    .no-data-msg  { font-size:14px; }
+    .no-data-sub  { font-size:12px; margin-top:4px; }
+
+    /* ── UPLOAD PROMPT (inline) ── */
+    .upload-prompt { background:#fff; border:2px dashed #cbd5e1; border-radius:12px; padding:36px 24px; text-align:center; margin-bottom:20px; }
+    .upload-prompt h2 { font-size:18px; font-weight:800; color:#1e293b; margin-bottom:6px; }
+    .upload-prompt p  { color:#64748b; font-size:13px; margin-bottom:16px; }
+
+    /* ── SITE VIEW HEADER ── */
+    .site-vhdr { display:flex; align-items:center; gap:12px; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid #e2e8f0; }
+    .site-vhdr-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+    .site-vhdr-title { font-size:20px; font-weight:800; color:#1e293b; }
+    .site-vhdr-sub { font-size:13px; color:#94a3b8; margin-top:1px; }
+    .site-vhdr-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
+
+    /* ── STAT INLINE ── */
+    .stat-row { display:flex; gap:20px; flex-wrap:wrap; }
+    .stat-item { }
+    .stat-label { font-size:10px; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
+    .stat-val   { font-size:18px; font-weight:800; color:#1e293b; }
+    .stat-trend { font-size:11px; }
+
+    /* ── CHART ── */
+    .chart-donut-wrap { display:flex; align-items:center; gap:20px; }
+    .chart-donut-wrap canvas { width:120px !important; height:120px !important; }
+    .donut-legend { display:flex; flex-direction:column; gap:6px; }
+    .dl-item { display:flex; align-items:center; gap:6px; font-size:12px; }
+    .dl-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+    .dl-label { color:#374151; }
+    .dl-count { font-weight:700; color:#1e293b; margin-left:auto; }
+
+    /* ── SEPARATOR ── */
+    .sep { height:1px; background:#e2e8f0; margin:20px 0; }
+    .mb8  { margin-bottom:8px; }
+    .mb16 { margin-bottom:16px; }
+    .mb20 { margin-bottom:20px; }
+
+    /* ── SETTINGS SECTIONS ── */
+    .settings-s { padding-bottom:20px; margin-bottom:20px; border-bottom:1px solid #f1f5f9; }
+    .settings-s:last-child { border-bottom:none; margin-bottom:0; padding-bottom:0; }
+    .settings-s-title { font-size:14px; font-weight:700; margin-bottom:12px; color:#1e293b; }
+    .cu-status { display:flex; align-items:center; gap:8px; font-size:12px; padding:8px 12px; border-radius:8px; margin-top:8px; }
+    .cu-status.connected { background:#f0fdf4; color:#15803d; }
+    .cu-status.error     { background:#fef2f2; color:#dc2626; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width:1024px) { .g6{grid-template-columns:repeat(3,1fr);} }
+    @media (max-width:768px) {
+      main { padding:12px; }
+      .g3,.g4,.g6 { grid-template-columns:1fr 1fr; }
+      header { flex-wrap:wrap; height:auto; padding:10px; gap:8px; }
+    }
+    @media (max-width:480px) { .g3,.g4,.g6,.g2 { grid-template-columns:1fr; } .legend-grid{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <span class="loading-text">Se caută date în repository…</span>
+</div>
+
+<div id="app" style="display:none">
+  <!-- HEADER -->
+  <header>
+    <div class="nav-brand"><em>◈</em> Looker Content Ogooga</div>
+    <nav class="main-nav">
+      <button class="nav-btn active" data-view="main">Dashboard</button>
+      <button class="nav-btn" data-view="SC" id="nav-SC">SuperCazino</button>
+      <button class="nav-btn" data-view="CCR" id="nav-CCR">Casino.com.ro</button>
+      <button class="nav-btn" data-view="JP" id="nav-JP">JocPăcănele</button>
+    </nav>
+    <div class="period-sel">
+      <button class="period-btn" data-p="7d">7z</button>
+      <button class="period-btn active" data-p="30d">30z</button>
+      <button class="period-btn" data-p="365d">365z</button>
+    </div>
+    <div class="hdr-actions">
+      <button class="btn-hdr" id="btn-upload">📥 Date</button>
+      <button class="btn-hdr" id="btn-settings">⚙ Setări</button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main>
+    <div id="view-main" class="view active"></div>
+    <div id="view-SC"   class="view"></div>
+    <div id="view-CCR"  class="view"></div>
+    <div id="view-JP"   class="view"></div>
+  </main>
+</div>
+
+<!-- MODAL UPLOAD -->
+<div class="overlay" id="modal-upload">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span class="modal-title">📥 Încarcă Date CSV</span>
+      <button class="modal-close" onclick="closeModal('modal-upload')">✕</button>
+    </div>
+    <div id="upload-file-status" class="file-status-list"></div>
+    <div class="fg">
+      <label>Fișier CSV Looker</label>
+      <input type="file" id="csv-file-input" accept=".csv">
+    </div>
+    <div class="fg-row">
+      <div class="fg">
+        <label>Site</label>
+        <select id="csv-site">
+          <option value="SC">SuperCazino (SC)</option>
+          <option value="CCR">Casino.com.ro (CCR)</option>
+          <option value="JP">JocPăcănele (JP)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Interval</label>
+        <select id="csv-period">
+          <option value="7d">7 zile</option>
+          <option value="30d" selected>30 zile</option>
+          <option value="365d">365 zile</option>
+        </select>
+      </div>
+    </div>
+    <div id="csv-upload-msg"></div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn-primary" onclick="handleCSVUpload()">Încarcă</button>
+      <button class="btn-secondary" onclick="closeModal('modal-upload')">Închide</button>
+    </div>
+    <div class="sep"></div>
+    <div class="settings-s-title" style="font-size:13px;font-weight:700;color:#64748b;margin-bottom:10px;">GSC (opțional)</div>
+    <div class="fg">
+      <label>Fișier CSV Google Search Console</label>
+      <input type="file" id="gsc-file-input" accept=".csv">
+    </div>
+    <div class="fg">
+      <label>Site GSC</label>
+      <select id="gsc-site">
+        <option value="SC">SuperCazino (SC)</option>
+        <option value="CCR">Casino.com.ro (CCR)</option>
+        <option value="JP">JocPăcănele (JP)</option>
+      </select>
+    </div>
+    <div id="gsc-upload-msg"></div>
+    <button class="btn-secondary" onclick="handleGSCUpload()">Încarcă GSC</button>
+  </div>
+</div>
+
+<!-- MODAL SETTINGS -->
+<div class="overlay" id="modal-settings">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span class="modal-title">⚙ Setări</span>
+      <button class="modal-close" onclick="closeModal('modal-settings')">✕</button>
+    </div>
+    <div class="settings-s">
+      <div class="settings-s-title">🔗 ClickUp Integration</div>
+      <div class="fg">
+        <label>API Token</label>
+        <input type="password" id="cu-token-input" placeholder="pk_xxxxx…">
+      </div>
+      <div class="fg">
+        <label>Team / Workspace ID <span style="color:#94a3b8;font-weight:400">(opțional — detectat automat)</span></label>
+        <input type="text" id="cu-team-input" placeholder="ex: 12345678">
+      </div>
+      <div id="cu-status-display"></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn-primary" onclick="connectClickUp()">Conectează</button>
+        <button class="btn-secondary" onclick="disconnectClickUp()">Deconectează</button>
+      </div>
+    </div>
+    <div class="settings-s">
+      <div class="settings-s-title">📂 Date actuale</div>
+      <div id="settings-data-status" class="file-status-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  CONSTANTS
+// ============================================================
+const SITES   = ['SC','CCR','JP'];
+const SITE_NAMES   = { SC:'SuperCazino', CCR:'Casino.com.ro', JP:'JocPăcănele' };
+const SITE_DOMAINS = { SC:'https://supercazino.ro', CCR:'https://casino.com.ro', JP:'https://jocpacanele.ro' };
+const SITE_COLORS  = { SC:'#3b82f6', CCR:'#8b5cf6', JP:'#ec4899' };
+const PERIODS = ['7d','30d','365d'];
+const PERIOD_LABELS = { '7d':'7 zile', '30d':'30 zile', '365d':'365 zile' };
+
+const CATS = ['Money Maker','Golden Nugget','Black Hole','Dead Weight','Low Volume'];
+const CAT = {
+  'Money Maker':   { label:'Money Makers',  color:'#16a34a', bg:'#f0fdf4', emoji:'💰', bc:'b-mm' },
+  'Golden Nugget': { label:'Golden Nuggets',color:'#d97706', bg:'#fffbeb', emoji:'✨', bc:'b-gn' },
+  'Black Hole':    { label:'Black Holes',   color:'#dc2626', bg:'#fef2f2', emoji:'🕳️', bc:'b-bh' },
+  'Dead Weight':   { label:'Dead Weight',   color:'#9ca3af', bg:'#f9fafb', emoji:'⚓', bc:'b-dw' },
+  'Low Volume':    { label:'Low Volume',    color:'#0369a1', bg:'#f0f9ff', emoji:'📉', bc:'b-lv' },
+};
+
+const LEGEND_TERMS = [
+  { term:'Sessions', def:'De câte ori a fost vizitată pagina (o persoană poate genera mai multe sesiuni).' },
+  { term:'Users',    def:'Câte persoane unice au vizitat pagina în perioada selectată.' },
+  { term:'ATC (Add to Carts)', def:'De câte ori s-a apăsat pe un link care duce spre un cazino partener.' },
+  { term:'SE – Session Efficiency', def:'Câte clickuri spre cazinouri generează, în medie, o sesiune. Indicatorul principal de performanță.' },
+  { term:'CR – Conversion Rate', def:'Câte clickuri spre cazinouri generează, în medie, un utilizator unic.' },
+  { term:'SI – Stickiness Index', def:'Cât de des revin utilizatorii (sesiuni per utilizator).' },
+  { term:'Trend', def:'Cum s-au schimbat cifrele față de perioada identică anterioară (+ creștere, − scădere).' },
+  { term:'💰 Money Maker', def:'Pagină cu mult trafic și conversie bună. De protejat și actualizat frecvent.' },
+  { term:'✨ Golden Nugget', def:'Pagină cu conversie bună dar trafic mic. De investit în SEO și internal linking.' },
+  { term:'🕳️ Black Hole', def:'Pagină cu mult trafic dar conversie slabă. De optimizat (CRO, intenție).' },
+  { term:'⚓ Dead Weight', def:'Pagină cu trafic mic și conversie slabă. De deprioritizat.' },
+  { term:'⚠️ At Risk', def:'Pagina a pierdut mai mult de 20% din trafic față de perioada anterioară. Se suprapune oricărei categorii.' },
+];
+
+// ============================================================
+//  STATE
+// ============================================================
+const S = {
+  period:   '30d',
+  view:     'main',
+  data:     {},   // { 'SC_30d': [pages] }
+  gsc:      {},   // { 'SC': { '/url': {...} } }
+  hasGSC:   { SC:false, CCR:false, JP:false },
+  cuIndex:  {},   // { '/url': { taskUrl, title, status } }
+  cuToken:  null,
+  cuTeamId: null,
+  charts:   {},
+  sortState:{},   // { 'tbl-SC-Money Maker': { col, dir } }
+  activeTab:{ SC:'Money Maker', CCR:'Money Maker', JP:'Money Maker' },
+  dataStatus:{},  // { 'SC_30d': 'loaded'|'missing'|'error' }
+};
+
+// ============================================================
+//  UTILITIES
+// ============================================================
+function key(site,period){ return `${site}_${period}`; }
+function getPages(site){ return S.data[key(site,S.period)] || null; }
+
+function fmt(n, dec=0){
+  if(n===null||n===undefined||isNaN(n)) return '—';
+  return n.toLocaleString('ro-RO',{maximumFractionDigits:dec,minimumFractionDigits:dec});
+}
+function fmtPct(n, dec=1){
+  if(n===null||n===undefined||isNaN(n)) return '—';
+  const sign = n>0?'+':'';
+  return `${sign}${n.toFixed(dec)}%`;
+}
+function fmtSE(n){
+  if(n===null||n===undefined||isNaN(n)) return '—';
+  return (n*100).toFixed(1)+'%';
+}
+function pill(val){
+  if(val===null||val===undefined||isNaN(val)) return `<span class="pill pill-nil">—</span>`;
+  const cls = val>0?'pill-up':val<0?'pill-down':'pill-nil';
+  const arrow = val>0?'▲':val<0?'▼':'→';
+  return `<span class="pill ${cls}">${arrow} ${fmtPct(val)}</span>`;
+}
+function gscPosCls(p){ return p<=10?'p-good':p<=30?'p-ok':'p-bad'; }
+
+function normalizeUrl(u){
+  if(!u) return '';
+  let s = u.trim().toLowerCase();
+  if(s.length>1 && s.endsWith('/')) s=s.slice(0,-1);
+  return s;
+}
+function median(arr){
+  if(!arr||!arr.length) return 0;
+  const s=[...arr].sort((a,b)=>a-b);
+  const m=Math.floor(s.length/2);
+  return s.length%2===0?(s[m-1]+s[m])/2:s[m];
+}
+function isOrganicSrc(src){
+  if(!src) return false;
+  const s=src.trim().toLowerCase();
+  if(s==='search.brave.com / referral') return true;
+  if(s.endsWith('/ organic')) return true;
+  return false;
+}
+function catPages(pages, cat){
+  if(cat==='At Risk') return pages.filter(p=>p.atRisk);
+  return pages.filter(p=>p.category===cat);
+}
+
+// ============================================================
+//  CSV PARSING
+// ============================================================
+function parseCSV(text, site, period){
+  const result = Papa.parse(text.trim(), { header:false, skipEmptyLines:'greedy', dynamicTyping:false });
+  if(!result.data || result.data.length<2)
+    return { error:'CSV gol sau format invalid.', pages:[] };
+
+  const hdr = result.data[0];
+  if(!hdr[0]||(hdr[0].indexOf('source')===-1&&hdr[0].indexOf('First')===-1))
+    return { error:`Header neașteptat: "${hdr[0]}"`, pages:[] };
+
+  const rows=[];
+  for(let i=1;i<result.data.length;i++){
+    const c=result.data[i];
+    if(!c||c.length<7) continue;
+    const src=(c[0]||'').trim();
+    const url=(c[1]||'').trim();
+    if(!isOrganicSrc(src)) continue;
+    if(!url||url==='(not set)'||url==='(not provided)'||url==='') continue;
+
+    const users   = parseInt(c[2],10)||0;
+    const dUsers  = c[3]&&c[3].trim()!=='' ? parseFloat(c[3]) : null;
+    const atc     = parseInt(c[4],10)||0;
+    const dATC    = c[5]&&c[5].trim()!=='' ? parseFloat(c[5]) : null;
+    const sess    = parseInt(c[6],10)||0;
+    const dSess   = c[7]&&c[7].trim()!=='' ? parseFloat(c[7]) : null;
+
+    rows.push({
+      url: normalizeUrl(url), users,
+      dUsers:  dUsers!==null&&isNaN(dUsers)?null:dUsers,
+      atc,
+      dATC:    dATC!==null&&isNaN(dATC)?null:dATC,
+      sess,
+      dSess:   dSess!==null&&isNaN(dSess)?null:dSess,
+    });
+  }
+  if(!rows.length) return { error:'Nu s-au găsit rânduri cu surse organice valide.', pages:[] };
+
+  const pages = aggregateRows(rows);
+  categorize(pages);
+  if(S.hasGSC[site]) mergeGSC(pages,site);
+  mergeClickUp(pages);
+  return { pages };
+}
+
+function aggregateRows(rows){
+  const m={};
+  for(const r of rows){
+    if(!m[r.url]) m[r.url]={
+      url:r.url, users:0,pvU:0,hasU:false, atc:0,pvA:0,hasA:false, sess:0,pvS:0,hasS:false
+    };
+    const p=m[r.url];
+    p.users+=r.users; p.atc+=r.atc; p.sess+=r.sess;
+    if(r.dUsers!==null&&r.users>0&&(1+r.dUsers)!==0){ p.pvU+=r.users/(1+r.dUsers); p.hasU=true; }
+    if(r.dATC!==null&&(1+r.dATC)!==0)               { p.pvA+=Math.max(0,r.atc/(1+r.dATC)); p.hasA=true; }
+    if(r.dSess!==null&&r.sess>0&&(1+r.dSess)!==0)   { p.pvS+=r.sess/(1+r.dSess); p.hasS=true; }
+  }
+  return Object.values(m).map(p=>{
+    const dS=p.hasS&&p.pvS>0?(p.sess-p.pvS)/p.pvS:null;
+    const dA=p.hasA&&p.pvA>0?(p.atc-p.pvA)/p.pvA:null;
+    const dU=p.hasU&&p.pvU>0?(p.users-p.pvU)/p.pvU:null;
+    const SE=p.sess>0?p.atc/p.sess:0;
+    const CR=p.users>0?p.atc/p.users:0;
+    const SI=p.users>0?p.sess/p.users:0;
+    return {
+      url:p.url, users:p.users, atc:p.atc, sess:p.sess,
+      SE, CR, SI,
+      tS:dS!==null?dS*100:null,
+      tA:dA!==null?dA*100:null,
+      tU:dU!==null?dU*100:null,
+      tSE:(dA!==null&&dS!==null)?(dA-dS)*100:null,
+      pvS:p.hasS?p.pvS:null, pvA:p.hasA?p.pvA:null, pvU:p.hasU?p.pvU:null,
+      category:null, atRisk:false,
+      gscImp:null,gscClk:null,gscPos:null,gscCTR:null,gscLU:null,
+      clickup:null,
+    };
+  });
+}
+
+function categorize(pages){
+  const q=pages.filter(p=>p.sess>=30);
+  const lv=pages.filter(p=>p.sess<30);
+  if(q.length){
+    const mS=median(q.map(p=>p.sess));
+    const mSE=median(q.map(p=>p.SE));
+    q.forEach(p=>{
+      const ht=p.sess>=mS, hse=p.SE>=mSE;
+      if(ht&&hse)       p.category='Money Maker';
+      else if(!ht&&hse) p.category='Golden Nugget';
+      else if(ht&&!hse) p.category='Black Hole';
+      else              p.category='Dead Weight';
+      p.atRisk=p.tS!==null&&p.tS<-20;
+    });
+  }
+  lv.forEach(p=>{ p.category='Low Volume'; p.atRisk=p.tS!==null&&p.tS<-20; });
+}
+
+// ============================================================
+//  GSC PARSING
+// ============================================================
+function parseGSC(text){
+  const r=Papa.parse(text.trim(),{header:true,skipEmptyLines:'greedy',dynamicTyping:true});
+  if(!r.data||!r.data.length) return null;
+  const map={};
+  for(const row of r.data){
+    const url=normalizeUrl(row.url||row.URL||row.Page||'');
+    if(!url) continue;
+    map[url]={
+      impressions: parseFloat(row.impressions||row.Impressions)||0,
+      clicks:      parseFloat(row.clicks||row.Clicks)||0,
+      position:    parseFloat(row.position||row.Position)||0,
+      ctr:         parseFloat(row.ctr||row.CTR)||0,
+      last_updated:row.last_updated||row.Last_Updated||'',
+    };
+  }
+  return Object.keys(map).length?map:null;
+}
+
+function mergeGSC(pages,site){
+  if(!S.gsc[site]) return;
+  const g=S.gsc[site];
+  pages.forEach(p=>{
+    const d=g[p.url]||g[p.url+'/'];
+    if(d){ p.gscImp=d.impressions; p.gscClk=d.clicks; p.gscPos=d.position; p.gscCTR=d.ctr; p.gscLU=d.last_updated; }
+  });
+}
+
+function mergeClickUp(pages){
+  if(!Object.keys(S.cuIndex).length) return;
+  pages.forEach(p=>{ const cu=S.cuIndex[p.url]||S.cuIndex[p.url+'/']; if(cu) p.clickup=cu; });
+}
+
+// ============================================================
+//  DATA LOADING
+// ============================================================
+async function autoFetch(){
+  const fetches=[];
+  for(const site of SITES) for(const p of PERIODS){
+    fetches.push(fetch(`./data/current/${site}_${p}.csv`)
+      .then(r=>r.ok?r.text().then(t=>({site,period:p,text:t})):Promise.resolve({site,period:p,miss:true}))
+      .catch(()=>({site,period:p,miss:true})));
+  }
+  const results=await Promise.all(fetches);
+  let loaded=0;
+  for(const r of results){
+    const k=key(r.site,r.period);
+    if(r.text){ const {pages,error}=parseCSV(r.text,r.site,r.period);
+      if(pages&&pages.length){ S.data[k]=pages; S.dataStatus[k]='loaded'; loaded++; }
+      else { S.dataStatus[k]=error?'error':'missing'; }
+    } else { S.dataStatus[k]='missing'; }
+  }
+  // GSC
+  for(const site of SITES){
+    fetch(`./data/current/${site}_gsc.csv`).then(r=>{if(r.ok)r.text().then(t=>{
+      const g=parseGSC(t);
+      if(g){ S.gsc[site]=g; S.hasGSC[site]=true;
+        PERIODS.forEach(p=>{ const pgs=S.data[key(site,p)]; if(pgs) mergeGSC(pgs,site); });
+        renderAll();
+      }
+    });}).catch(()=>{});
+  }
+  return loaded;
+}
+
+function loadCSVText(text,site,period){
+  const k=key(site,period);
+  const {pages,error}=parseCSV(text,site,period);
+  if(error&&(!pages||!pages.length)) return {error};
+  S.data[k]=pages; S.dataStatus[k]='loaded';
+  return {ok:true,count:pages.length};
+}
+
+// ============================================================
+//  CLICKUP
+// ============================================================
+function extractUrls(task){
+  const urls=new Set();
+  const text=[task.description||'',task.name||'',
+    ...(task.custom_fields||[]).map(f=>String(f.value||''))].join(' ');
+  const domRx=/(supercazino\.ro|casino\.com\.ro|jocpacanele\.ro)(\/[^\s"'<>)]+)/g;
+  let m;
+  while((m=domRx.exec(text))!==null) urls.add(normalizeUrl(m[2]));
+  const pathRx=/(?:^|\s|["'(])(\/[a-z0-9\-_\/]+)/g;
+  while((m=pathRx.exec(text))!==null){ if(m[1].length>1) urls.add(normalizeUrl(m[1])); }
+  return [...urls];
+}
+
+async function fetchClickUpTasks(token,teamId){
+  const headers={'Authorization':token,'Content-Type':'application/json'};
+  let tid=teamId;
+  if(!tid){
+    const r=await fetch('https://api.clickup.com/api/v2/team',{headers});
+    if(!r.ok) throw new Error(`Auth eșuat: ${r.status}`);
+    const d=await r.json();
+    if(!d.teams||!d.teams.length) throw new Error('Nu s-au găsit workspace-uri.');
+    tid=d.teams[0].id;
+    S.cuTeamId=tid;
+  }
+  const index={};
+  let page=0, hasMore=true;
+  while(hasMore && page<20){
+    const r=await fetch(`https://api.clickup.com/api/v2/team/${tid}/task?page=${page}&include_closed=true`,{headers});
+    if(!r.ok) break;
+    const d=await r.json();
+    if(!d.tasks||!d.tasks.length){ hasMore=false; break; }
+    for(const t of d.tasks){
+      const urls=extractUrls(t);
+      for(const u of urls){
+        if(!index[u]) index[u]={taskUrl:t.url,title:t.name,status:t.status?.status||''};
+      }
+    }
+    hasMore=d.tasks.length>=100;
+    page++;
+  }
+  return {index,teamId:tid};
+}
+
+async function connectClickUp(){
+  const token=(document.getElementById('cu-token-input').value||'').trim();
+  const teamId=(document.getElementById('cu-team-input').value||'').trim()||null;
+  const disp=document.getElementById('cu-status-display');
+  if(!token){ disp.innerHTML=`<div class="banner banner-error">Introdu API token-ul.</div>`; return; }
+  disp.innerHTML=`<div class="cu-status"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div> Conectare…</div>`;
+  try{
+    const {index,teamId:tid}=await fetchClickUpTasks(token,teamId||null);
+    S.cuToken=token; S.cuTeamId=tid; S.cuIndex=index;
+    const cnt=Object.keys(index).length;
+    disp.innerHTML=`<div class="cu-status connected">✓ Conectat — ${cnt} URL-uri mapate din ClickUp</div>`;
+    // Re-merge all loaded data
+    for(const site of SITES) for(const p of PERIODS){
+      const pgs=S.data[key(site,p)]; if(pgs) mergeClickUp(pgs);
+    }
+    renderAll();
+  } catch(e){
+    disp.innerHTML=`<div class="cu-status error">✗ Eroare: ${e.message}</div>`;
+  }
+}
+
+function disconnectClickUp(){
+  S.cuToken=null; S.cuTeamId=null; S.cuIndex={};
+  for(const site of SITES) for(const p of PERIODS){
+    const pgs=S.data[key(site,p)]; if(pgs) pgs.forEach(pg=>pg.clickup=null);
+  }
+  document.getElementById('cu-status-display').innerHTML='';
+  renderAll();
+}
+
+// ============================================================
+//  CHART UTILS
+// ============================================================
+function mkChart(id,cfg){
+  if(S.charts[id]){ S.charts[id].destroy(); delete S.charts[id]; }
+  const el=document.getElementById(id);
+  if(!el) return null;
+  S.charts[id]=new Chart(el,cfg);
+  return S.charts[id];
+}
+
+function mkDonut(id,pages){
+  const counts={};
+  CATS.forEach(c=>counts[c]=0);
+  pages.forEach(p=>{ if(counts[p.category]!==undefined) counts[p.category]++; });
+  mkChart(id,{
+    type:'doughnut',
+    data:{
+      labels:CATS.map(c=>CAT[c].label),
+      datasets:[{data:CATS.map(c=>counts[c]),backgroundColor:CATS.map(c=>CAT[c].color),borderWidth:0}]
+    },
+    options:{cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>`${ctx.label}: ${ctx.raw}`}}},responsive:false}
+  });
+  return counts;
+}
+
+// ============================================================
+//  AGGREGATE STATS
+// ============================================================
+function getAggregateStats(period){
+  let users=0,atc=0,sess=0,pvU=0,pvA=0,pvS=0,hasPrev=false;
+  for(const site of SITES){
+    const pgs=S.data[key(site,period)];
+    if(!pgs) continue;
+    for(const p of pgs){
+      users+=p.users; atc+=p.atc; sess+=p.sess;
+      if(p.pvS!==null){pvS+=p.pvS;hasPrev=true;}
+      if(p.pvA!==null) pvA+=p.pvA;
+      if(p.pvU!==null) pvU+=p.pvU;
+    }
+  }
+  const dS=hasPrev&&pvS>0?(sess-pvS)/pvS:null;
+  const dA=hasPrev&&pvA>0?(atc-pvA)/pvA:null;
+  const dU=hasPrev&&pvU>0?(users-pvU)/pvU:null;
+  return {
+    users,atc,sess,
+    SE:sess>0?atc/sess:0, CR:users>0?atc/users:0, SI:users>0?sess/users:0,
+    tS:dS!==null?dS*100:null, tA:dA!==null?dA*100:null, tU:dU!==null?dU*100:null,
+  };
+}
+
+function getSiteStats(site,period){
+  const pgs=S.data[key(site,period)];
+  if(!pgs) return null;
+  let users=0,atc=0,sess=0,pvU=0,pvA=0,pvS=0,hasPrev=false;
+  pgs.forEach(p=>{
+    users+=p.users;atc+=p.atc;sess+=p.sess;
+    if(p.pvS!==null){pvS+=p.pvS;hasPrev=true;}
+    if(p.pvA!==null) pvA+=p.pvA;
+    if(p.pvU!==null) pvU+=p.pvU;
+  });
+  const dS=hasPrev&&pvS>0?(sess-pvS)/pvS:null;
+  const dA=hasPrev&&pvA>0?(atc-pvA)/pvA:null;
+  return {
+    pgs, users,atc,sess,
+    SE:sess>0?atc/sess:0, CR:users>0?atc/users:0, SI:users>0?sess/users:0,
+    tS:dS!==null?dS*100:null, tA:dA!==null?dA*100:null,
+  };
+}
+
+// ============================================================
+//  RENDER MAIN DASHBOARD
+// ============================================================
+function renderMain(){
+  const el=document.getElementById('view-main');
+  const agg=getAggregateStats(S.period);
+  const hasAny=SITES.some(s=>!!S.data[key(s,S.period)]);
+
+  let html='';
+
+  if(!hasAny){
+    html=`<div class="upload-prompt">
+      <div style="font-size:48px;margin-bottom:12px">📊</div>
+      <h2>Niciun CSV încărcat pentru ${PERIOD_LABELS[S.period]}</h2>
+      <p>Încarcă CSV-urile din Looker pentru a vedea analiza.</p>
+      <button class="btn-primary" onclick="openModal('modal-upload')">📥 Încarcă Date</button>
+    </div>`;
+  } else {
+    // Aggregate metrics
+    html+=`<div class="sec">
+      <div class="sec-hdr"><span class="sec-title">Agregat — Toate Site-urile</span><span class="sec-sub">${PERIOD_LABELS[S.period]}</span></div>
+      <div class="g6">
+        ${statCard('Total Sessions',fmt(agg.sess),agg.tS)}
+        ${statCard('Total ATC',fmt(agg.atc),agg.tA)}
+        ${statCard('Total Users',fmt(agg.users),agg.tU)}
+        ${statCard('SE Agregat',fmtSE(agg.SE),null,'Clickuri afiliere / sesiune')}
+        ${statCard('CR Agregat',fmtSE(agg.CR),null,'Clickuri / user unic')}
+        ${statCard('SI Agregat',agg.SI.toFixed(2),null,'Sesiuni / user')}
+      </div>
+    </div>`;
+
+    // Mini site cards
+    html+=`<div class="sec"><div class="sec-hdr"><span class="sec-title">Detaliu per Site</span></div><div class="g3">`;
+    for(const site of SITES){
+      const st=getSiteStats(site,S.period);
+      html+=miniSiteCard(site,st);
+    }
+    html+='</div></div>';
+  }
+
+  // Legend
+  html+=`<div class="legend-wrap">
+    <div class="legend-hdr" id="legend-hdr" onclick="toggleLegend()">
+      <h3>📖 Glosar termeni — pentru echipa de Content</h3>
+      <span class="legend-toggle" id="legend-toggle">▼ Afișează</span>
+    </div>
+    <div class="legend-body hidden" id="legend-body">
+      <div class="legend-grid">`;
+  for(const item of LEGEND_TERMS){
+    html+=`<div><div class="leg-term">${item.term}</div><div class="leg-def">${item.def}</div></div>`;
+  }
+  html+=`</div></div></div>`;
+  el.innerHTML=html;
+}
+
+function statCard(label,value,trend,sub=''){
+  const trendHtml=trend!==null&&trend!==undefined?`<div class="card-trend">${pill(trend)} față de perioadă anterioară</div>`:'';
+  const subHtml=sub?`<div style="font-size:11px;color:#94a3b8;margin-top:2px">${sub}</div>`:'';
+  return `<div class="card"><div class="card-label">${label}</div><div class="card-value">${value}</div>${subHtml}${trendHtml}</div>`;
+}
+
+function miniSiteCard(site,st){
+  const color=SITE_COLORS[site];
+  const name=SITE_NAMES[site];
+  if(!st){
+    return `<div class="site-mini" onclick="navigate('${site}')">
+      <div class="site-mini-name"><span class="site-mini-dot" style="background:${color}"></span>${name}</div>
+      <div class="no-data" style="padding:16px 0"><div class="no-data-icon" style="font-size:24px">📭</div><div class="no-data-sub">Date lipsă pentru ${PERIOD_LABELS[S.period]}</div></div>
+    </div>`;
+  }
+  const {pgs,sess,atc,SE,tS,tA}=st;
+  const counts={};CATS.forEach(c=>counts[c]=0);
+  pgs.forEach(p=>{if(counts[p.category]!==undefined)counts[p.category]++;});
+  const total=pgs.length||1;
+  const atRiskCount=pgs.filter(p=>p.atRisk).length;
+
+  const bars=CATS.filter(c=>c!=='Low Volume').map(c=>{
+    const pct=Math.round((counts[c]/total)*100);
+    return `<div class="cat-bar" style="background:${CAT[c].color};flex:${counts[c]||0.1}" title="${CAT[c].label}: ${counts[c]}"></div>`;
+  }).join('');
+
+  const riskBadge=atRiskCount?`<span class="badge b-risk">⚠️ ${atRiskCount} at risk</span>`:'';
+
+  return `<div class="site-mini" onclick="navigate('${site}')">
+    <div class="site-mini-name"><span class="site-mini-dot" style="background:${color}"></span>${name} ${riskBadge}</div>
+    <div class="site-mini-metrics">
+      <div><div class="sm-m-label">Sessions</div><div class="sm-m-val">${fmt(sess)}</div><div class="sm-m-trend">${pill(tS)}</div></div>
+      <div><div class="sm-m-label">ATC</div><div class="sm-m-val">${fmt(atc)}</div><div class="sm-m-trend">${pill(tA)}</div></div>
+      <div><div class="sm-m-label">SE</div><div class="sm-m-val">${fmtSE(SE)}</div></div>
+      <div><div class="sm-m-label">Pagini</div><div class="sm-m-val">${pgs.length}</div></div>
+    </div>
+    <div class="cat-bar-wrap">${bars}</div>
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+      ${CATS.filter(c=>c!=='Low Volume'&&counts[c]>0).map(c=>`<span class="badge ${CAT[c].bc}">${CAT[c].emoji} ${counts[c]}</span>`).join('')}
+      ${counts['Low Volume']?`<span class="badge b-lv">📉 ${counts['Low Volume']}</span>`:''}
+    </div>
+  </div>`;
+}
+
+// ============================================================
+//  RENDER SITE VIEW
+// ============================================================
+function renderSite(site){
+  const el=document.getElementById(`view-${site}`);
+  const st=getSiteStats(site,S.period);
+  const color=SITE_COLORS[site];
+  const name=SITE_NAMES[site];
+  const domain=SITE_DOMAINS[site];
+
+  if(!st){
+    el.innerHTML=`<div class="site-vhdr">
+      <span class="site-vhdr-dot" style="background:${color}"></span>
+      <div><div class="site-vhdr-title">${name}</div><div class="site-vhdr-sub">${domain}</div></div>
+    </div>
+    <div class="upload-prompt">
+      <div style="font-size:36px;margin-bottom:8px">📭</div>
+      <h2>Date lipsă pentru ${PERIOD_LABELS[S.period]}</h2>
+      <p>Încarcă un CSV Looker pentru ${name} — ${PERIOD_LABELS[S.period]}.</p>
+      <button class="btn-primary" onclick="openModal('modal-upload')">📥 Încarcă</button>
+    </div>`;
+    return;
+  }
+
+  const {pgs,users,atc,sess,SE,CR,SI,tS,tA}=st;
+  const counts={};CATS.forEach(c=>counts[c]=0);
+  pgs.forEach(p=>{if(counts[p.category]!==undefined)counts[p.category]++;});
+  const atRisk=pgs.filter(p=>p.atRisk).sort((a,b)=>b.sess-a.sess);
+  const mm=pgs.filter(p=>p.category==='Money Maker').sort((a,b)=>b.atc-a.atc).slice(0,5);
+  const gn=pgs.filter(p=>p.category==='Golden Nugget').sort((a,b)=>b.SE-a.SE).slice(0,5);
+
+  let html=`<div class="site-vhdr">
+    <span class="site-vhdr-dot" style="background:${color}"></span>
+    <div>
+      <div class="site-vhdr-title">${name}</div>
+      <div class="site-vhdr-sub">${domain} · ${PERIOD_LABELS[S.period]} · ${pgs.length} pagini analizate</div>
+    </div>
+    <div class="site-vhdr-right">
+      ${atRisk.length?`<span class="badge b-risk">⚠️ ${atRisk.length} At Risk</span>`:''}
+    </div>
+  </div>`;
+
+  // Stats row
+  html+=`<div class="g6 mb20">
+    ${miniStatCard('Sessions',fmt(sess),tS)}
+    ${miniStatCard('ATC',fmt(atc),tA)}
+    ${miniStatCard('Users',fmt(users),null)}
+    ${miniStatCard('SE (principal)',fmtSE(SE),null)}
+    ${miniStatCard('CR',fmtSE(CR),null)}
+    ${miniStatCard('SI (Stickiness)',SI.toFixed(2),null)}
+  </div>`;
+
+  // Alerts + Top lists + Donut
+  if(atRisk.length){
+    html+=`<div class="sec">
+      <div class="sec-hdr"><span class="sec-title">⚠️ Alerte At Risk</span><span class="sec-sub">Trafic scăzut cu peste 20% față de perioadă anterioară</span></div>
+      <div class="alert-strip">`;
+    atRisk.slice(0,3).forEach(p=>{
+      html+=`<div class="alert-item">
+        <span class="alert-icon">⚠️</span>
+        <div class="alert-body">
+          <div class="alert-url"><a href="${domain}${p.url}" target="_blank">${p.url}</a></div>
+          <div class="alert-meta"><span class="badge ${CAT[p.category].bc}">${CAT[p.category].emoji} ${p.category}</span></div>
+          <div class="alert-metrics">Trafic: ${pill(p.tS)} · ATC: ${fmt(p.atc)} · SE: ${fmtSE(p.SE)}</div>
+        </div>
+        <div style="text-align:right;font-size:12px;color:#94a3b8">${fmt(p.sess)} sess</div>
+      </div>`;
+    });
+    html+='</div></div>';
+  }
+
+  html+=`<div class="g3 mb20">`;
+
+  // Top 5 Money Makers
+  html+=`<div class="card"><div class="sec-hdr" style="margin-bottom:10px"><span class="sec-title">💰 Top Money Makers</span><span class="sec-sub">după ATC</span></div>`;
+  html+=topList(mm,domain,'atc','ATC');
+  html+='</div>';
+
+  // Top 5 Golden Nuggets
+  html+=`<div class="card"><div class="sec-hdr" style="margin-bottom:10px"><span class="sec-title">✨ Top Golden Nuggets</span><span class="sec-sub">după SE</span></div>`;
+  html+=topList(gn,domain,'SE','SE',true);
+  html+='</div>';
+
+  // Category distribution donut
+  html+=`<div class="card">
+    <div class="sec-hdr" style="margin-bottom:12px"><span class="sec-title">Distribuție Categorii</span></div>
+    <div class="chart-donut-wrap">
+      <canvas id="donut-${site}" width="120" height="120"></canvas>
+      <div class="donut-legend">`;
+  CATS.forEach(c=>{
+    html+=`<div class="dl-item"><span class="dl-dot" style="background:${CAT[c].color}"></span><span class="dl-label">${CAT[c].label}</span><span class="dl-count">${counts[c]}</span></div>`;
+  });
+  html+=`</div></div></div>`;
+  html+='</div>';// close g3
+
+  // Tabs
+  const tabOrder=['Money Maker','Golden Nugget','Black Hole','Dead Weight','Low Volume','At Risk'];
+  html+=`<div class="tbl-card">
+    <div class="tab-nav" id="tabs-${site}">`;
+  tabOrder.forEach(cat=>{
+    const cnt=cat==='At Risk'?atRisk.length:counts[cat]||0;
+    const active=S.activeTab[site]===cat?'active':'';
+    html+=`<button class="tab-btn ${active}" onclick="switchTab('${site}','${cat.replace(/'/,"\\'")}')">${cat==='At Risk'?'⚠️ At Risk':CAT[cat]?CAT[cat].emoji+' '+cat:cat}<span class="tab-cnt">${cnt}</span></button>`;
+  });
+  html+=`</div><div id="tab-content-${site}" class="tbl-wrap"></div></div>`;
+
+  el.innerHTML=html;
+
+  // Init chart and table
+  mkDonut(`donut-${site}`,pgs);
+  renderTable(site,pgs);
+}
+
+function miniStatCard(label,val,trend){
+  return `<div class="card" style="padding:14px 16px">
+    <div class="card-label">${label}</div>
+    <div class="card-value" style="font-size:20px">${val}</div>
+    ${trend!==null&&trend!==undefined?`<div style="margin-top:4px">${pill(trend)}</div>`:''}
+  </div>`;
+}
+
+function topList(items,domain,sortKey,label,isSE=false){
+  if(!items.length) return `<div class="no-data" style="padding:12px 0"><div class="no-data-sub">Nicio pagină</div></div>`;
+  let html=`<ul class="top-list">`;
+  items.forEach((p,i)=>{
+    const val=isSE?fmtSE(p[sortKey]):fmt(p[sortKey]);
+    html+=`<li class="top-item">
+      <div class="top-rank">${i+1}</div>
+      <div class="top-item-body">
+        <div class="top-url"><a href="${domain}${p.url}" target="_blank">${p.url}</a></div>
+        <div class="top-meta">${label}: <strong>${val}</strong> · Sessions: ${fmt(p.sess)}</div>
+      </div>
+      ${p.atRisk?'<span class="badge b-risk">⚠️</span>':''}
+    </li>`;
+  });
+  html+='</ul>';
+  return html;
+}
+
+// ============================================================
+//  RENDER TABLE
+// ============================================================
+function renderTable(site,allPages){
+  const el=document.getElementById(`tab-content-${site}`);
+  if(!el) return;
+  const cat=S.activeTab[site];
+  const pages=cat==='At Risk'?allPages.filter(p=>p.atRisk):allPages.filter(p=>p.category===cat);
+
+  if(!pages.length){
+    el.innerHTML=`<div class="no-data"><div class="no-data-icon">✅</div><div class="no-data-msg">Nicio pagină în această categorie.</div></div>`;
+    return;
+  }
+
+  const tblId=`tbl-${site}-${cat}`;
+  if(!S.sortState[tblId]) S.sortState[tblId]={ col:'sess', dir:'desc' };
+  const {col,dir}=S.sortState[tblId];
+
+  const sorted=[...pages].sort((a,b)=>{
+    let va=a[col]??-Infinity, vb=b[col]??-Infinity;
+    if(typeof va==='string') return dir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
+    return dir==='asc'?va-vb:vb-va;
+  });
+
+  const hasCU=sorted.some(p=>p.clickup);
+  const hasGSC=S.hasGSC[site];
+  const domain=SITE_DOMAINS[site];
+
+  const cols=[
+    {key:'url',  label:'Landing Page',    sortable:false},
+    {key:'sess', label:'Sessions',        sortable:true},
+    {key:'atc',  label:'ATC',             sortable:true},
+    {key:'SE',   label:'SE',              sortable:true},
+    {key:'CR',   label:'CR',              sortable:true},
+    {key:'SI',   label:'SI',              sortable:true},
+    {key:'tS',   label:'Trend Sess %',    sortable:true},
+    {key:'tA',   label:'Trend ATC %',     sortable:true},
+  ];
+  if(hasGSC){
+    cols.push({key:'gscPos',label:'GSC Pos',sortable:true});
+    cols.push({key:'gscImp',label:'GSC Impr',sortable:true});
+    cols.push({key:'gscLU', label:'Last Updated',sortable:false});
+  }
+  if(hasCU) cols.push({key:'clickup',label:'ClickUp',sortable:false});
+
+  let html=`<table><thead><tr>`;
+  cols.forEach(c=>{
+    if(!c.sortable){ html+=`<th>${c.label}</th>`; return; }
+    const sortCls=col===c.key?(dir==='asc'?'sort-asc':'sort-desc'):'';
+    html+=`<th class="${sortCls}" onclick="sortTable('${site}','${cat.replace(/'/,"\\'").replace(/\"/,'\\"')}','${c.key}')">${c.label}</th>`;
+  });
+  html+=`</tr></thead><tbody>`;
+
+  for(const p of sorted){
+    const rowCls=p.atRisk?'at-risk':'';
+    html+=`<tr class="${rowCls}">`;
+    html+=`<td class="td-url"><a href="${domain}${p.url}" target="_blank">${p.url}</a>
+      ${p.atRisk?'<span class="badge b-risk" style="margin-left:4px">⚠️</span>':''}
+      ${cat!=='At Risk'?`<span class="badge ${CAT[p.category]?.bc||''}" style="margin-left:4px">${CAT[p.category]?.emoji||''}</span>`:''}
+    </td>`;
+    html+=`<td class="td-num">${fmt(p.sess)}</td>`;
+    html+=`<td class="td-num">${fmt(p.atc)}</td>`;
+    html+=`<td class="td-se">${fmtSE(p.SE)}</td>`;
+    html+=`<td class="td-num">${fmtSE(p.CR)}</td>`;
+    html+=`<td class="td-num">${p.SI.toFixed(2)}</td>`;
+    html+=`<td class="td-trend">${pill(p.tS)}</td>`;
+    html+=`<td class="td-trend">${pill(p.tA)}</td>`;
+    if(hasGSC){
+      const posCls=p.gscPos?gscPosCls(p.gscPos):'';
+      html+=`<td class="td-num"><span class="gsc-pos ${posCls}">${p.gscPos?p.gscPos.toFixed(1):'—'}</span></td>`;
+      html+=`<td class="td-num">${p.gscImp?fmt(p.gscImp):'—'}</td>`;
+      html+=`<td>${p.gscLU||'—'}</td>`;
+    }
+    if(hasCU){
+      html+=`<td>${p.clickup?`<a class="cu-link" href="${p.clickup.taskUrl}" target="_blank">↗ ${p.clickup.title.slice(0,30)}${p.clickup.title.length>30?'…':''}</a>`:'—'}</td>`;
+    }
+    html+=`</tr>`;
+  }
+  html+=`</tbody></table>`;
+  el.innerHTML=html;
+}
+
+function sortTable(site,cat,colKey){
+  const tblId=`tbl-${site}-${cat}`;
+  const prev=S.sortState[tblId]||{col:'sess',dir:'desc'};
+  S.sortState[tblId]={ col:colKey, dir:prev.col===colKey&&prev.dir==='desc'?'asc':'desc' };
+  const pgs=getPages(site);
+  if(pgs) renderTable(site,pgs);
+}
+
+function switchTab(site,cat){
+  S.activeTab[site]=cat;
+  // Update tab buttons
+  const nav=document.getElementById(`tabs-${site}`);
+  if(nav) nav.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.classList.toggle('active',btn.textContent.includes(cat==='At Risk'?'At Risk':cat));
+  });
+  const pgs=getPages(site);
+  if(pgs) renderTable(site,pgs);
+}
+
+// ============================================================
+//  LEGEND TOGGLE
+// ============================================================
+function toggleLegend(){
+  const body=document.getElementById('legend-body');
+  const hdr=document.getElementById('legend-hdr');
+  const tog=document.getElementById('legend-toggle');
+  if(!body) return;
+  const open=body.classList.toggle('hidden');
+  if(tog) tog.textContent=open?'▼ Afișează':'▲ Ascunde';
+  if(hdr) hdr.classList.toggle('open',!open);
+}
+
+// ============================================================
+//  NAVIGATION
+// ============================================================
+function navigate(view){
+  S.view=view;
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${view}`));
+  if(view==='main') renderMain();
+  else renderSite(view);
+}
+
+function renderAll(){
+  if(S.view==='main') renderMain();
+  else renderSite(S.view);
+  updateNavState();
+}
+
+function updateNavState(){
+  SITES.forEach(site=>{
+    const btn=document.getElementById(`nav-${site}`);
+    if(btn) btn.classList.toggle('no-data',!PERIODS.some(p=>!!S.data[key(site,p)]));
+  });
+  updateFileStatusList();
+}
+
+function updateFileStatusList(){
+  // Upload modal status
+  const ul=document.getElementById('upload-file-status');
+  if(!ul) return;
+  let html='';
+  for(const site of SITES) for(const p of PERIODS){
+    const k=key(site,p);
+    const st=S.dataStatus[k];
+    const ico=st==='loaded'?`<span class="fsl-ok">✓ Loaded</span>`:st==='error'?`<span class="fsl-err">✗ Eroare</span>`:`<span class="fsl-miss">— Lipsă</span>`;
+    html+=`<div class="fsl-item"><span class="fsl-name">${k}.csv</span>${ico}</div>`;
+  }
+  ul.innerHTML=html;
+
+  // Settings modal status
+  const sl=document.getElementById('settings-data-status');
+  if(sl) sl.innerHTML=html;
+}
+
+// ============================================================
+//  MODAL HANDLERS
+// ============================================================
+function openModal(id){
+  document.getElementById(id).classList.add('open');
+  if(id==='modal-upload') updateFileStatusList();
+  if(id==='modal-settings'){ updateFileStatusList(); renderCuStatus(); }
+}
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+function renderCuStatus(){
+  const el=document.getElementById('cu-status-display');
+  if(!el) return;
+  if(S.cuToken){
+    const cnt=Object.keys(S.cuIndex).length;
+    el.innerHTML=`<div class="cu-status connected">✓ Conectat — Team ID: ${S.cuTeamId} — ${cnt} URL-uri mapate</div>`;
+    document.getElementById('cu-token-input').value=S.cuToken;
+    if(S.cuTeamId) document.getElementById('cu-team-input').value=S.cuTeamId;
+  } else {
+    el.innerHTML='';
+  }
+}
+
+// ============================================================
+//  UPLOAD HANDLERS
+// ============================================================
+async function handleCSVUpload(){
+  const file=document.getElementById('csv-file-input').files[0];
+  const site=document.getElementById('csv-site').value;
+  const period=document.getElementById('csv-period').value;
+  const msg=document.getElementById('csv-upload-msg');
+  if(!file){ msg.innerHTML=`<div class="banner banner-error">Selectează un fișier CSV.</div>`; return; }
+  msg.innerHTML=`<div class="banner banner-info">Se procesează…</div>`;
+  try{
+    const text=await file.text();
+    const res=loadCSVText(text,site,period);
+    if(res.error){ msg.innerHTML=`<div class="banner banner-error">Eroare: ${res.error}</div>`; return; }
+    msg.innerHTML=`<div class="banner banner-success">✓ ${site}_${period}.csv încărcat — ${res.count} pagini organice.</div>`;
+    updateNavState();
+    renderAll();
+  } catch(e){
+    msg.innerHTML=`<div class="banner banner-error">Eroare la citire: ${e.message}</div>`;
+  }
+}
+
+async function handleGSCUpload(){
+  const file=document.getElementById('gsc-file-input').files[0];
+  const site=document.getElementById('gsc-site').value;
+  const msg=document.getElementById('gsc-upload-msg');
+  if(!file){ msg.innerHTML=`<div class="banner banner-error">Selectează un fișier GSC.</div>`; return; }
+  try{
+    const text=await file.text();
+    const g=parseGSC(text);
+    if(!g){ msg.innerHTML=`<div class="banner banner-error">Format GSC invalid sau fișier gol.</div>`; return; }
+    S.gsc[site]=g; S.hasGSC[site]=true;
+    PERIODS.forEach(p=>{ const pgs=S.data[key(site,p)]; if(pgs) mergeGSC(pgs,site); });
+    msg.innerHTML=`<div class="banner banner-success">✓ GSC ${site} încărcat — ${Object.keys(g).length} URL-uri.</div>`;
+    renderAll();
+  } catch(e){
+    msg.innerHTML=`<div class="banner banner-error">Eroare: ${e.message}</div>`;
+  }
+}
+
+// ============================================================
+//  PERIOD & NAV EVENTS
+// ============================================================
+document.querySelectorAll('.period-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    S.period=btn.dataset.p;
+    document.querySelectorAll('.period-btn').forEach(b=>b.classList.toggle('active',b.dataset.p===S.period));
+    renderAll();
+  });
+});
+
+document.querySelectorAll('.nav-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{ if(!btn.classList.contains('no-data')) navigate(btn.dataset.view); });
+});
+
+document.getElementById('btn-upload').addEventListener('click',()=>openModal('modal-upload'));
+document.getElementById('btn-settings').addEventListener('click',()=>openModal('modal-settings'));
+
+// Close modals on overlay click
+document.querySelectorAll('.overlay').forEach(ov=>{
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.classList.remove('open'); });
+});
+
+// ============================================================
+//  INIT
+// ============================================================
+async function init(){
+  document.getElementById('loading-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
+
+  const loaded=await autoFetch();
+
+  document.getElementById('loading-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+
+  renderAll();
+}
+
+init();
+</script>
+</body>
+</html>
