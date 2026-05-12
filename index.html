@@ -108,7 +108,7 @@
     /* ── TABLES ── */
     .tbl-wrap { overflow-x:auto; border-radius:0 0 12px 12px; }
     .tbl-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; }
-    table { width:100%; border-collapse:collapse; font-size:12px; }
+    table { width:100%; border-collapse:collapse; font-size:12px; min-width:700px; }
     /* [S2] header-uri numerice centrate */
     thead th { background:#f8fafc; padding:9px 11px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#64748b; border-bottom:2px solid #e2e8f0; white-space:nowrap; cursor:pointer; user-select:none; }
     thead th.th-num { text-align:center; }
@@ -234,11 +234,36 @@
     /* ── RESPONSIVE ── */
     @media (max-width:1024px) { .g6{grid-template-columns:repeat(3,1fr);} }
     @media (max-width:768px) {
+      /* Header: brand + actions pe rândul 1, nav scrollabil pe rândul 2 */
+      header { flex-wrap:wrap; height:auto; padding:8px 12px; gap:6px; }
+      .nav-brand { flex:1; }
+      nav.main-nav { order:10; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; scrollbar-width:none; }
+      nav.main-nav::-webkit-scrollbar { display:none; }
+      /* Grids */
       main { padding:12px; }
-      .g3,.g4,.g6 { grid-template-columns:1fr 1fr; }
-      header { flex-wrap:wrap; height:auto; padding:10px; gap:8px; }
+      .g3,.g4 { grid-template-columns:1fr 1fr; }
+      .g6 { grid-template-columns:repeat(2,1fr); }
+      /* Cards: valori ușor mai mici */
+      .card-value { font-size:24px; }
+      .sm-m-val { font-size:20px; }
+      /* Site view header: wrap pe 2 rânduri pe mic */
+      .site-vhdr { flex-wrap:wrap; }
+      .site-vhdr-right { margin-left:0; width:100%; }
+      /* Donut chart: stivuit vertical */
+      .chart-donut-wrap { flex-direction:column; align-items:flex-start; }
+      /* Modal mai compact */
+      .modal { padding:16px; }
+      /* URL-uri trunchiate mai agresiv */
+      .td-url { max-width:150px; }
+      /* Legendă: o coloană */
+      .legend-grid { grid-template-columns:1fr; }
     }
-    @media (max-width:480px) { .g3,.g4,.g6,.g2 { grid-template-columns:1fr; } .legend-grid{grid-template-columns:1fr;} }
+    @media (max-width:480px) {
+      .g3,.g4,.g6,.g2 { grid-template-columns:1fr; }
+      .card-value { font-size:20px; }
+      .sm-m-val { font-size:18px; }
+      .nav-btn { padding:5px 9px; font-size:12px; }
+    }
   </style>
 </head>
 <body>
@@ -354,6 +379,10 @@
       </div>
     </div>
     <div class="settings-s">
+      <div class="settings-s-title">🚫 Pagini Excluse (Performance)</div>
+      <div id="settings-excl-status"></div>
+    </div>
+    <div class="settings-s">
       <div class="settings-s-title">📂 Date actuale</div>
       <div id="settings-data-status" class="file-status-list"></div>
     </div>
@@ -415,6 +444,7 @@ const S = {
   sortState: {},
   activeTab: { SC:'Money Maker', CCR:'Money Maker', JP:'Money Maker' },
   dataStatus:{},
+  excluded: null,
 };
 
 // ============================================================
@@ -469,6 +499,23 @@ function pctRank(sortedArr,val){
 }
 
 // ============================================================
+//  EXCLUDED PAGES FILTER
+// ============================================================
+// Returnează true dacă URL-ul (normalizat) trebuie exclus din analiză.
+// Regulile vin din data/current/excluded_pages.json
+function isExcluded(normalizedPath){
+  if(!S.excluded) return false;
+  const slug=normalizedPath.replace(/^\//,'');
+  const prefixes=(S.excluded.rules?.prefixes)||[];
+  const kwds   =(S.excluded.rules?.contains)||[];
+  const exacts =(S.excluded.exact_paths)||[];
+  for(const px of prefixes){ if(slug.startsWith(px)) return true; }
+  for(const kw of kwds)    { if(slug.includes(kw))   return true; }
+  for(const ep of exacts)  { if(normalizedPath===normalizeUrl(ep)) return true; }
+  return false;
+}
+
+// ============================================================
 //  CSV PARSING
 // ============================================================
 function parseCSV(text,site,period){
@@ -486,6 +533,7 @@ function parseCSV(text,site,period){
     const url=(c[1]||'').trim();
     if(!isOrganicSrc(src)) continue;
     if(!url||url==='(not set)'||url==='(not provided)'||url==='') continue;
+    if(isExcluded(normalizeUrl(url))) continue;   // pagini performance excluse
     const users =parseInt(c[2],10)||0;
     const dUsers=c[3]&&c[3].trim()!==''?parseFloat(c[3]):null;
     const atc   =parseInt(c[4],10)||0;
@@ -620,6 +668,13 @@ function mergeClickUp(pages){
 //  DATA LOADING
 // ============================================================
 async function autoFetch(){
+  // 1. Încarcă regulile de excludere ÎNAINTE de a procesa orice CSV
+  try{
+    const excR=await fetch('./data/current/excluded_pages.json');
+    if(excR.ok) S.excluded=await excR.json();
+  }catch(e){}
+
+  // 2. Fetch CSV-uri (paralel)
   const fetches=[];
   for(const site of SITES) for(const p of PERIODS){
     fetches.push(fetch(`./data/current/${site}_${p}.csv`)
@@ -1154,7 +1209,7 @@ function updateFileStatusList(){
 function openModal(id){
   document.getElementById(id).classList.add('open');
   if(id==='modal-upload')updateFileStatusList();
-  if(id==='modal-settings'){updateFileStatusList();renderCuStatus();}
+  if(id==='modal-settings'){updateFileStatusList();renderCuStatus();renderExclStatus();}
 }
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 
@@ -1172,6 +1227,23 @@ function renderCuStatus(){
     document.getElementById('cu-token-input').value=S.cuToken;
     if(S.cuTeamId)document.getElementById('cu-team-input').value=S.cuTeamId;
   } else el.innerHTML='';
+}
+
+function renderExclStatus(){
+  const el=document.getElementById('settings-excl-status');if(!el)return;
+  if(!S.excluded){
+    el.innerHTML=`<div class="banner banner-warn">Fișierul <code>data/excluded_pages.json</code> nu a fost găsit — filtrul de excluderi nu e activ.</div>`;
+    return;
+  }
+  const prefixes=(S.excluded.rules?.prefixes||[]);
+  const kwds   =(S.excluded.rules?.contains||[]);
+  const exacts =(S.excluded.exact_paths||[]);
+  el.innerHTML=`<div class="banner banner-success">✓ Filtru activ — paginile performance sunt excluse din analiză.</div>
+    <div class="file-status-list" style="margin-top:8px">
+      <div class="fsl-item"><span class="fsl-name">Sluguri cu prefix exclus</span><span class="fsl-ok">${prefixes.map(p=>`<code>${p}*</code>`).join(', ')||'—'}</span></div>
+      <div class="fsl-item"><span class="fsl-name">Cuvinte-cheie excluse</span><span class="fsl-ok">${kwds.map(k=>`<code>*${k}*</code>`).join(', ')||'—'}</span></div>
+      <div class="fsl-item"><span class="fsl-name">Pagini exacte excluse</span><span class="fsl-ok">${exacts.length} pagini</span></div>
+    </div>`;
 }
 
 // ============================================================
