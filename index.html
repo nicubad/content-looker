@@ -750,25 +750,37 @@ async function fetchClickUpTasks(token,teamId){
   }
   return {index,teamId:tid};
 }
-async function connectClickUp(){
-  const token=(document.getElementById('cu-token-input').value||'').trim();
-  const teamId=(document.getElementById('cu-team-input').value||'').trim()||null;
+async function connectClickUp(silent=false){
+  const tokenInput=(document.getElementById('cu-token-input').value||'').trim();
+  const teamInput =(document.getElementById('cu-team-input').value||'').trim()||null;
+  // În modul silent (auto-connect la startup) folosim token-ul din localStorage
+  const token=silent?localStorage.getItem('cu_token'):tokenInput;
+  const teamId=silent?(localStorage.getItem('cu_teamId')||null):teamInput;
   const disp=document.getElementById('cu-status-display');
-  if(!token){disp.innerHTML=`<div class="banner banner-error">Introdu API token-ul.</div>`;return;}
-  disp.innerHTML=`<div class="cu-status"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div> Conectare…</div>`;
+  if(!token){if(!silent&&disp)disp.innerHTML=`<div class="banner banner-error">Introdu API token-ul.</div>`;return;}
+  if(!silent&&disp)disp.innerHTML=`<div class="cu-status"><div class="spinner" style="width:18px;height:18px;border-width:2px"></div> Conectare…</div>`;
   try{
-    const {index,teamId:tid}=await fetchClickUpTasks(token,teamId||null);
+    const {index,teamId:tid}=await fetchClickUpTasks(token,teamId);
     S.cuToken=token;S.cuTeamId=tid;S.cuIndex=index;
+    // Salvează în localStorage pentru sesiunile viitoare
+    localStorage.setItem('cu_token',token);
+    if(tid) localStorage.setItem('cu_teamId',tid);
     const cnt=Object.keys(index).length;
-    disp.innerHTML=`<div class="cu-status connected">✓ Conectat — ${cnt} URL-uri mapate din ClickUp</div>`;
+    if(disp) disp.innerHTML=`<div class="cu-status connected">✓ Conectat — ${cnt} URL-uri mapate din ClickUp</div>`;
     for(const site of SITES) for(const p of PERIODS){const pgs=S.data[key(site,p)];if(pgs)mergeClickUp(pgs);}
     renderAll();
-  }catch(e){disp.innerHTML=`<div class="cu-status error">✗ Eroare: ${e.message}</div>`;}
+  }catch(e){
+    if(!silent&&disp) disp.innerHTML=`<div class="cu-status error">✗ Eroare: ${e.message}</div>`;
+    // Token salvat e invalid — îl ștergem
+    if(silent){localStorage.removeItem('cu_token');localStorage.removeItem('cu_teamId');}
+  }
 }
 function disconnectClickUp(){
   S.cuToken=null;S.cuTeamId=null;S.cuIndex={};
+  localStorage.removeItem('cu_token');
+  localStorage.removeItem('cu_teamId');
   for(const site of SITES) for(const p of PERIODS){const pgs=S.data[key(site,p)];if(pgs)pgs.forEach(pg=>pg.clickup=null);}
-  document.getElementById('cu-status-display').innerHTML='';
+  document.getElementById('cu-status-display').innerHTML=`<div class="banner banner-info">Deconectat. Token-ul a fost șters.</div>`;
   renderAll();
 }
 
@@ -1223,9 +1235,11 @@ function renderCuStatus(){
   const el=document.getElementById('cu-status-display');if(!el)return;
   if(S.cuToken){
     const cnt=Object.keys(S.cuIndex).length;
-    el.innerHTML=`<div class="cu-status connected">✓ Conectat — Team ID: ${S.cuTeamId} — ${cnt} URL-uri mapate</div>`;
+    el.innerHTML=`<div class="cu-status connected">✓ Conectat — Team ID: ${S.cuTeamId} — ${cnt} URL-uri mapate <span style="opacity:0.7;font-size:11px">(token salvat în browser)</span></div>`;
     document.getElementById('cu-token-input').value=S.cuToken;
     if(S.cuTeamId)document.getElementById('cu-team-input').value=S.cuTeamId;
+  } else if(localStorage.getItem('cu_token')){
+    el.innerHTML=`<div class="cu-status" style="background:#fefce8;color:#854d0e">⏳ Token salvat — conectare în curs…</div>`;
   } else el.innerHTML='';
 }
 
@@ -1309,6 +1323,8 @@ async function init(){
   document.getElementById('loading-screen').style.display='none';
   document.getElementById('app').style.display='flex';
   renderAll();
+  // Auto-connect ClickUp dacă există token salvat în localStorage
+  if(localStorage.getItem('cu_token')) connectClickUp(true);
 }
 init();
 </script>
