@@ -1,0 +1,23 @@
+{
+  "_comment": "Pagini excluse din analiza organica — performance pages. Editeaza direct pe github.com, nu necesita cod.",
+  "_format": {
+    "rules.prefixes": "Exclude orice pagina al carei slug (dupa /) incepe cu unul din aceste siruri",
+    "rules.contains": "Exclude orice pagina care contine unul din aceste siruri oriunde in URL",
+    "exact_paths": "Exclude exact aceste URL-uri (fara domeniu, cu sau fara slash final)"
+  },
+  "rules": {
+    "prefixes": ["m-"],
+    "contains": ["pmax", "depunere-ex"]
+  },
+  "exact_paths": [
+    "/bonus-fara-depunere-online",
+    "/bonusuri-de-top",
+    "/cazinouri-rulaj-mic-2026",
+    "/top-bonus-bun-venit",
+    "/top-cazino-online",
+    "/rotiri-fara-depunere-online",
+    "/cazinouri-noi-licentiate",
+    "/top-oferte-cazinouri-romania-2026",
+    "/oferte-pe-jar"
+  ]
+}
